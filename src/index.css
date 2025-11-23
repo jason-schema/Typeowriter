@@ -1,0 +1,179 @@
+:root {
+  --bg-color: #fdfbf7;
+  --text-color: #2c2c2c;
+  --cursor-color: #ff4d4d;
+  --placeholder-color: #a0a0a0;
+  /* Greyed out */
+  --font-main: 'Courier Prime', 'Courier New', Courier, monospace;
+  --line-height: 2.5rem;
+  --font-size: 1.5rem;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  height: 100%;
+}
+
+body {
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  font-family: var(--font-main);
+  font-size: var(--font-size);
+  overflow: hidden;
+  width: 100vw;
+  height: 100vh;
+  /* Fallback */
+  height: 100%;
+  /* cursor: none; REMOVED - causing invisible mouse cursor */
+}
+
+#root {
+  height: 100%;
+}
+
+.app-container {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+  background-color: transparent;
+}
+
+.typewriter-container {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  background-color: transparent;
+  /* Fade effect at top and bottom */
+  mask-image: linear-gradient(to bottom, transparent, black 20%, black 80%, transparent);
+  -webkit-mask-image: linear-gradient(to bottom, transparent, black 20%, black 80%, transparent);
+}
+
+.paper {
+  position: absolute;
+  top: 0;
+  left: 0;
+  will-change: transform;
+  z-index: 1;
+  /* Ensure it sits above the background but below cursor */
+  /* We use transform for positioning, so top/left 0 is fine as anchor */
+  min-width: 100px;
+  /* Ensure it has width even if empty */
+  min-height: 50px;
+  /* Ensure it has height even if empty */
+}
+
+.line-numbers-container {
+  position: absolute;
+  top: 0;
+  will-change: transform;
+  z-index: 5;
+  pointer-events: none;
+  font-family: var(--font-main);
+  font-size: 12px;
+  /* Reduced font size */
+  color: #888888;
+  /* Darker grey */
+}
+
+.line-numbers-container.left {
+  left: 20px;
+  text-align: right;
+}
+
+.line-numbers-container.right {
+  right: 20px;
+  text-align: left;
+}
+
+.line-number-item {
+  /* Height and line-height set inline in JS to match lines */
+}
+
+.line {
+  /* padding-left: 2px; Removed to fix alignment */
+  /* Tiny offset */
+  /* Ensure text aligns nicely */
+  position: relative;
+  /* For absolute positioning of placeholder if needed, though span is fine */
+  font-size: 12px;
+  /* Reduced font size */
+}
+
+.placeholder {
+  color: var(--placeholder-color);
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+.cursor-guide {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--char-width);
+  height: var(--line-height);
+  background-color: #555;
+  /* Dark grey block */
+  transform: translate(0, -50%);
+  /* Center vertically */
+  animation: blink 1s step-end infinite;
+  pointer-events: none;
+  z-index: 10;
+}
+
+@keyframes blink {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0;
+  }
+}
+
+/* Filename Styles */
+.filename-container {
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  z-index: 100;
+}
+
+.filename-display {
+  font-family: var(--font-main);
+  font-size: 1rem;
+  color: var(--text-color);
+  opacity: 0.5;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.filename-display:hover {
+  opacity: 1;
+}
+
+.filename-input {
+  font-family: var(--font-main);
+  font-size: 1rem;
+  color: var(--text-color);
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--text-color);
+  outline: none;
+  padding: 0;
+  margin: 0;
+}
+
+/* Selection Style */
+.line.selected {
+  background-color: rgba(0, 0, 0, 0.1);
+  /* Subtle highlight */
+  color: var(--text-color);
+}
