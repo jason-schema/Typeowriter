@@ -14,6 +14,9 @@ const Typewriter = () => {
     const measureRef = useRef(null);
     const nameInputRef = useRef(null);
 
+    const [isSoundEnabled, setIsSoundEnabled] = useState(true);
+    const audioCtxRef = useRef(null);
+
     // Measure character width for the monospaced font
     useEffect(() => {
         if (measureRef.current) {
@@ -42,6 +45,100 @@ const Typewriter = () => {
         URL.revokeObjectURL(url);
     };
 
+    // Initialize AudioContext lazily
+    const getAudioContext = () => {
+        if (!audioCtxRef.current) {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            if (AudioContext) {
+                audioCtxRef.current = new AudioContext();
+            }
+        }
+        if (audioCtxRef.current && audioCtxRef.current.state === 'suspended') {
+            audioCtxRef.current.resume();
+        }
+        return audioCtxRef.current;
+    };
+
+    // Sound Engine
+    const playKeySound = (type) => {
+        if (!isSoundEnabled) return;
+        const ctx = getAudioContext();
+        if (!ctx) return;
+
+        const t = ctx.currentTime;
+
+        if (type === 'click') {
+            // Mechanical "Clack"
+            // We need a sharp attack with some high frequency content
+
+            // Oscillator 1: The "body" of the sound (low thud)
+            const osc1 = ctx.createOscillator();
+            const gain1 = ctx.createGain();
+            osc1.connect(gain1);
+            gain1.connect(ctx.destination);
+
+            osc1.type = 'triangle';
+            osc1.frequency.setValueAtTime(300, t);
+            osc1.frequency.exponentialRampToValueAtTime(50, t + 0.05);
+
+            gain1.gain.setValueAtTime(0.8, t);
+            gain1.gain.exponentialRampToValueAtTime(0.01, t + 0.05);
+
+            osc1.start(t);
+            osc1.stop(t + 0.05);
+
+            // Oscillator 2: The "click" (high frequency snap)
+            const osc2 = ctx.createOscillator();
+            const gain2 = ctx.createGain();
+            osc2.connect(gain2);
+            gain2.connect(ctx.destination);
+
+            osc2.type = 'square';
+            osc2.frequency.setValueAtTime(2000, t);
+            osc2.frequency.exponentialRampToValueAtTime(1000, t + 0.02);
+
+            gain2.gain.setValueAtTime(0.1, t);
+            gain2.gain.exponentialRampToValueAtTime(0.01, t + 0.02);
+
+            osc2.start(t);
+            osc2.stop(t + 0.02);
+
+        } else if (type === 'ding') {
+            // Analog Bell "Ding"
+            // Needs to be bright and clear.
+            // Fundamental + Overtones
+
+            const fundamental = 1200; // Higher pitch for clarity
+            const duration = 1.5;
+
+            // Fundamental
+            const osc1 = ctx.createOscillator();
+            const gain1 = ctx.createGain();
+            osc1.connect(gain1);
+            gain1.connect(ctx.destination);
+
+            osc1.type = 'sine';
+            osc1.frequency.setValueAtTime(fundamental, t);
+            gain1.gain.setValueAtTime(0.15, t); // Reduced from 0.3
+            gain1.gain.exponentialRampToValueAtTime(0.001, t + duration);
+            osc1.start(t);
+            osc1.stop(t + duration);
+
+            // Overtone (Harmonic for brightness)
+            const osc2 = ctx.createOscillator();
+            const gain2 = ctx.createGain();
+            osc2.connect(gain2);
+            gain2.connect(ctx.destination);
+
+            osc2.type = 'sine';
+            osc2.frequency.setValueAtTime(fundamental * 2.5, t); // Non-integer harmonic for metallic sound
+            gain2.gain.setValueAtTime(0.05, t); // Reduced from 0.1
+            gain2.gain.exponentialRampToValueAtTime(0.001, t + (duration * 0.6)); // Decays faster
+            osc2.start(t);
+            osc2.stop(t + duration);
+        }
+    };
+
     const handleLineClick = (e, lineIndex) => {
         if (!charWidth) return;
 
@@ -67,8 +164,31 @@ const Typewriter = () => {
 
     useEffect(() => {
         const handleKeyDown = (e) => {
-            // Ignore if editing filename
-            if (isEditingName) return;
+            // Filename Editing Logic
+            if (isEditingName) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    // If text is selected (which we do on click), move to end?
+                    // Actually, the user asked: "If the filename is selected and the user clicks enter move the cursor to the end of the filename"
+                    // We can check selection via window.getSelection or input ref
+                    const input = nameInputRef.current;
+                    if (input && input.selectionStart === 0 && input.selectionEnd === input.value.length) {
+                        // All selected, move to end
+                        input.selectionStart = input.selectionEnd = input.value.length;
+                    } else {
+                        // Save and exit
+                        setIsEditingName(false);
+                    }
+                }
+                return;
+            }
+
+            // Cmd+M to Toggle Sound
+            if ((e.metaKey || e.ctrlKey) && e.key === 'm') {
+                e.preventDefault();
+                setIsSoundEnabled(prev => !prev);
+                return;
+            }
 
             // Cmd+S to Save
             if ((e.metaKey || e.ctrlKey) && e.key === 's') {
@@ -141,6 +261,7 @@ const Typewriter = () => {
 
             if (e.key.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey) {
                 // Regular character
+                // playKeySound('click'); // Removed as per user request
                 if (isAllSelected) {
                     // Replace all text
                     setLines([e.key]);
@@ -151,6 +272,7 @@ const Typewriter = () => {
                     const currentLine = lines[activeLineIndex];
                     // Check for 65-char limit
                     if (currentLine.length >= 65) {
+                        playKeySound('ding');
                         // Auto-return: Insert new line then the character
                         setLines(prev => {
                             const newLines = [...prev];
@@ -158,12 +280,12 @@ const Typewriter = () => {
                             if (cursorCol >= currentLine.length) {
                                 newLines.splice(activeLineIndex + 1, 0, e.key);
                             } else {
-                                // If cursor is in middle, split line? 
+                                // If cursor is in middle, split line?
                                 // "Shift carriage to new line" usually implies just moving down.
                                 // Let's keep it simple: Split at cursor, insert char in new line?
-                                // Or just force wrap? 
+                                // Or just force wrap?
                                 // Let's do: Insert char, then check length? No, prevent > 65.
-                                // Implementation: Split current line at cursor. 
+                                // Implementation: Split current line at cursor.
                                 // Actually, we are just typing, we should probably just wrap the NEW character to the next line.
                                 newLines.splice(activeLineIndex + 1, 0, e.key);
                             }
@@ -182,6 +304,7 @@ const Typewriter = () => {
                     }
                 }
             } else if (e.key === 'Enter') {
+                playKeySound('ding');
                 if (isAllSelected) {
                     setLines(["", ""]);
                     setActiveLineIndex(1);
@@ -202,6 +325,7 @@ const Typewriter = () => {
                     setCursorCol(0);
                 }
             } else if (e.key === 'Backspace') {
+                // playKeySound('click'); // Removed as per user request
                 if (isAllSelected) {
                     setLines([""]);
                     setActiveLineIndex(0);
@@ -243,7 +367,7 @@ const Typewriter = () => {
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [activeLineIndex, cursorCol, isEditingName, isAllSelected, lines, fileName, fontSize]);
+    }, [activeLineIndex, cursorCol, isEditingName, isAllSelected, lines, fileName, fontSize, isSoundEnabled]);
 
     // Dynamic Layout Calculations
     const lineHeight = fontSize * 2; // e.g., 24px for 12px font
@@ -251,10 +375,7 @@ const Typewriter = () => {
     const verticalOffset = (activeLineIndex * lineHeight) + (lineHeight / 2); // Center active line
 
     return (
-        <div
-            className="typewriter-container"
-            style={{ '--char-width': `${charWidth}px`, '--font-size': `${fontSize}px`, '--line-height': `${lineHeight}px` }}
-        >
+        <div className="app-container">
             {/* Filename Display/Edit */}
             <div className="filename-container">
                 {isEditingName ? (
@@ -265,9 +386,7 @@ const Typewriter = () => {
                         value={fileName}
                         onChange={(e) => setFileName(e.target.value)}
                         onBlur={() => setIsEditingName(false)}
-                        onKeyDown={(e) => {
-                            if (e.key === 'Enter') setIsEditingName(false);
-                        }}
+                        onFocus={(e) => e.target.select()} // Select all on focus (click)
                     />
                 ) : (
                     <span
@@ -280,69 +399,84 @@ const Typewriter = () => {
                 )}
             </div>
 
-            {/* Hidden measurement element */}
-            <span
-                ref={measureRef}
-                style={{ visibility: 'hidden', position: 'absolute', whiteSpace: 'pre', fontSize: `${fontSize}px` }}
-            >
-                W
-            </span>
-
-            {/* Line Numbers Left */}
-            <div
-                className="line-numbers-container left"
-                style={{
-                    transform: `translateY(calc(50vh - ${verticalOffset}px))`,
-                    transition: 'transform 0.1s ease-out'
-                }}
-            >
-                {lines.map((_, index) => (
-                    <div key={index} className="line-number-item" style={{ height: `${lineHeight}px`, lineHeight: `${lineHeight}px`, fontSize: `${fontSize}px` }}>
-                        {index + 1}
-                    </div>
-                ))}
+            {/* Shortcuts List */}
+            <div className="shortcuts-container">
+                <div>Cmd + S : Save</div>
+                <div>Cmd + A : Select All</div>
+                <div>Cmd + M : Toggle Sound ({isSoundEnabled ? 'On' : 'Off'})</div>
+                <div>Cmd + + : Increase Font</div>
+                <div>Cmd + - : Decrease Font</div>
             </div>
 
-            {/* Line Numbers Right */}
+            {/* The Typewriter Area (Masked) */}
             <div
-                className="line-numbers-container right"
-                style={{
-                    transform: `translateY(calc(50vh - ${verticalOffset}px))`,
-                    transition: 'transform 0.1s ease-out'
-                }}
+                className="typewriter-container"
+                style={{ '--char-width': `${charWidth}px`, '--font-size': `${fontSize}px`, '--line-height': `${lineHeight}px` }}
             >
-                {lines.map((_, index) => (
-                    <div key={index} className="line-number-item" style={{ height: `${lineHeight}px`, lineHeight: `${lineHeight}px`, fontSize: `${fontSize}px` }}>
-                        {index + 1}
-                    </div>
-                ))}
-            </div>
+                {/* Hidden measurement element */}
+                <span
+                    ref={measureRef}
+                    style={{ visibility: 'hidden', position: 'absolute', whiteSpace: 'pre', fontSize: `${fontSize}px` }}
+                >
+                    W
+                </span>
 
-            {/* The Paper (moves) */}
-            <div
-                className="paper"
-                style={{
-                    transform: `translate(calc(50vw + ${translateX}px), calc(50vh - ${verticalOffset}px))`,
-                    transition: 'transform 0.1s ease-out' // Smooth movement
-                }}
-            >
-                {lines.map((line, index) => (
-                    <div
-                        key={index}
-                        className={`line ${index === activeLineIndex ? 'active' : ''} ${isAllSelected ? 'selected' : ''}`}
-                        style={{ height: `${lineHeight}px`, lineHeight: `${lineHeight}px`, whiteSpace: 'pre', cursor: 'text', fontSize: `${fontSize}px` }}
-                        onClick={(e) => handleLineClick(e, index)}
-                    >
-                        {line}
-                        {lines.length === 1 && lines[0] === "" && index === 0 && !isEditingName && (
-                            <span className="placeholder">Start typing...</span>
-                        )}
-                    </div>
-                ))}
-            </div>
+                {/* Line Numbers Left */}
+                <div
+                    className="line-numbers-container left"
+                    style={{
+                        transform: `translateY(calc(50vh - ${verticalOffset}px))`,
+                        transition: 'transform 0.1s ease-out'
+                    }}
+                >
+                    {lines.map((_, index) => (
+                        <div key={index} className="line-number-item" style={{ height: `${lineHeight}px`, lineHeight: `${lineHeight}px`, fontSize: `${fontSize}px` }}>
+                            {index + 1}
+                        </div>
+                    ))}
+                </div>
 
-            {/* The Static Cursor (Fixed in center) */}
-            {!isAllSelected && <div className="cursor-guide"></div>}
+                {/* Line Numbers Right */}
+                <div
+                    className="line-numbers-container right"
+                    style={{
+                        transform: `translateY(calc(50vh - ${verticalOffset}px))`,
+                        transition: 'transform 0.1s ease-out'
+                    }}
+                >
+                    {lines.map((_, index) => (
+                        <div key={index} className="line-number-item" style={{ height: `${lineHeight}px`, lineHeight: `${lineHeight}px`, fontSize: `${fontSize}px` }}>
+                            {index + 1}
+                        </div>
+                    ))}
+                </div>
+
+                {/* The Paper (moves) */}
+                <div
+                    className="paper"
+                    style={{
+                        transform: `translate(calc(50vw + ${translateX}px), calc(50vh - ${verticalOffset}px))`,
+                        transition: 'transform 0.1s ease-out' // Smooth movement
+                    }}
+                >
+                    {lines.map((line, index) => (
+                        <div
+                            key={index}
+                            className={`line ${index === activeLineIndex ? 'active' : ''} ${isAllSelected ? 'selected' : ''}`}
+                            style={{ height: `${lineHeight}px`, lineHeight: `${lineHeight}px`, whiteSpace: 'pre', cursor: 'text', fontSize: `${fontSize}px` }}
+                            onClick={(e) => handleLineClick(e, index)}
+                        >
+                            {line}
+                            {lines.length === 1 && lines[0] === "" && index === 0 && !isEditingName && (
+                                <span className="placeholder">Start typing...</span>
+                            )}
+                        </div>
+                    ))}
+                </div>
+
+                {/* The Static Cursor (Fixed in center) */}
+                {!isAllSelected && <div className="cursor-guide"></div>}
+            </div>
         </div>
     );
 };
