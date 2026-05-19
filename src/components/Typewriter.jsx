@@ -401,11 +401,11 @@ const Typewriter = () => {
 
             {/* Shortcuts List */}
             <div className="shortcuts-container">
-                <div>Cmd + S : Save</div>
-                <div>Cmd + A : Select All</div>
-                <div>Cmd + M : Toggle Sound ({isSoundEnabled ? 'On' : 'Off'})</div>
-                <div>Cmd + + : Increase Font</div>
-                <div>Cmd + - : Decrease Font</div>
+                <div>Cmd + S — Pull the page</div>
+                <div>Cmd + A — Ink the whole sheet</div>
+                <div>Cmd + M — Bell {isSoundEnabled ? 'on' : 'off'}</div>
+                <div>Cmd + + — Heavier strike</div>
+                <div>Cmd + - — Lighter strike</div>
             </div>
 
             {/* The Typewriter Area (Masked) */}
