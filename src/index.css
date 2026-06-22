@@ -91,9 +91,7 @@ body {
   text-align: left;
 }
 
-.line-number-item {
-  /* Height and line-height set inline in JS to match lines */
-}
+
 
 .line {
   /* padding-left: 2px; Removed to fix alignment */
@@ -103,12 +101,6 @@ body {
   /* For absolute positioning of placeholder if needed, though span is fine */
   font-size: 12px;
   /* Reduced font size */
-}
-
-.placeholder {
-  color: var(--placeholder-color);
-  pointer-events: none;
-  opacity: 0.6;
 }
 
 .cursor-guide {
@@ -126,6 +118,10 @@ body {
   z-index: 10;
 }
 
+.cursor-guide.blurred {
+  animation: breathe 3s ease-in-out infinite;
+}
+
 @keyframes blink {
 
   0%,
@@ -135,6 +131,18 @@ body {
 
   50% {
     opacity: 0;
+  }
+}
+
+@keyframes breathe {
+
+  0%,
+  100% {
+    opacity: 0.05;
+  }
+
+  50% {
+    opacity: 0.5;
   }
 }
 

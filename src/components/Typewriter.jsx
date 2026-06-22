@@ -14,8 +14,8 @@ const Typewriter = () => {
     const measureRef = useRef(null);
     const nameInputRef = useRef(null);
 
-    const [isSoundEnabled, setIsSoundEnabled] = useState(true);
-    const audioCtxRef = useRef(null);
+    // Focus State
+    const [isWindowFocused, setIsWindowFocused] = useState(true);
 
     // Measure character width for the monospaced font
     useEffect(() => {
@@ -32,6 +32,18 @@ const Typewriter = () => {
         }
     }, [isEditingName]);
 
+    // Track Window Focus
+    useEffect(() => {
+        const onFocus = () => setIsWindowFocused(true);
+        const onBlur = () => setIsWindowFocused(false);
+        window.addEventListener('focus', onFocus);
+        window.addEventListener('blur', onBlur);
+        return () => {
+            window.removeEventListener('focus', onFocus);
+            window.removeEventListener('blur', onBlur);
+        };
+    }, []);
+
     const downloadFile = () => {
         const textContent = lines.join('\n');
         const blob = new Blob([textContent], { type: 'text/plain' });
@@ -43,100 +55,6 @@ const Typewriter = () => {
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-    };
-
-    // Initialize AudioContext lazily
-    const getAudioContext = () => {
-        if (!audioCtxRef.current) {
-            const AudioContext = window.AudioContext || window.webkitAudioContext;
-            if (AudioContext) {
-                audioCtxRef.current = new AudioContext();
-            }
-        }
-        if (audioCtxRef.current && audioCtxRef.current.state === 'suspended') {
-            audioCtxRef.current.resume();
-        }
-        return audioCtxRef.current;
-    };
-
-    // Sound Engine
-    const playKeySound = (type) => {
-        if (!isSoundEnabled) return;
-        const ctx = getAudioContext();
-        if (!ctx) return;
-
-        const t = ctx.currentTime;
-
-        if (type === 'click') {
-            // Mechanical "Clack"
-            // We need a sharp attack with some high frequency content
-
-            // Oscillator 1: The "body" of the sound (low thud)
-            const osc1 = ctx.createOscillator();
-            const gain1 = ctx.createGain();
-            osc1.connect(gain1);
-            gain1.connect(ctx.destination);
-
-            osc1.type = 'triangle';
-            osc1.frequency.setValueAtTime(300, t);
-            osc1.frequency.exponentialRampToValueAtTime(50, t + 0.05);
-
-            gain1.gain.setValueAtTime(0.8, t);
-            gain1.gain.exponentialRampToValueAtTime(0.01, t + 0.05);
-
-            osc1.start(t);
-            osc1.stop(t + 0.05);
-
-            // Oscillator 2: The "click" (high frequency snap)
-            const osc2 = ctx.createOscillator();
-            const gain2 = ctx.createGain();
-            osc2.connect(gain2);
-            gain2.connect(ctx.destination);
-
-            osc2.type = 'square';
-            osc2.frequency.setValueAtTime(2000, t);
-            osc2.frequency.exponentialRampToValueAtTime(1000, t + 0.02);
-
-            gain2.gain.setValueAtTime(0.1, t);
-            gain2.gain.exponentialRampToValueAtTime(0.01, t + 0.02);
-
-            osc2.start(t);
-            osc2.stop(t + 0.02);
-
-        } else if (type === 'ding') {
-            // Analog Bell "Ding"
-            // Needs to be bright and clear.
-            // Fundamental + Overtones
-
-            const fundamental = 1200; // Higher pitch for clarity
-            const duration = 1.5;
-
-            // Fundamental
-            const osc1 = ctx.createOscillator();
-            const gain1 = ctx.createGain();
-            osc1.connect(gain1);
-            gain1.connect(ctx.destination);
-
-            osc1.type = 'sine';
-            osc1.frequency.setValueAtTime(fundamental, t);
-            gain1.gain.setValueAtTime(0.15, t); // Reduced from 0.3
-            gain1.gain.exponentialRampToValueAtTime(0.001, t + duration);
-            osc1.start(t);
-            osc1.stop(t + duration);
-
-            // Overtone (Harmonic for brightness)
-            const osc2 = ctx.createOscillator();
-            const gain2 = ctx.createGain();
-            osc2.connect(gain2);
-            gain2.connect(ctx.destination);
-
-            osc2.type = 'sine';
-            osc2.frequency.setValueAtTime(fundamental * 2.5, t); // Non-integer harmonic for metallic sound
-            gain2.gain.setValueAtTime(0.05, t); // Reduced from 0.1
-            gain2.gain.exponentialRampToValueAtTime(0.001, t + (duration * 0.6)); // Decays faster
-            osc2.start(t);
-            osc2.stop(t + duration);
-        }
     };
 
     const handleLineClick = (e, lineIndex) => {
@@ -180,13 +98,6 @@ const Typewriter = () => {
                         setIsEditingName(false);
                     }
                 }
-                return;
-            }
-
-            // Cmd+M to Toggle Sound
-            if ((e.metaKey || e.ctrlKey) && e.key === 'm') {
-                e.preventDefault();
-                setIsSoundEnabled(prev => !prev);
                 return;
             }
 
@@ -261,7 +172,6 @@ const Typewriter = () => {
 
             if (e.key.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey) {
                 // Regular character
-                // playKeySound('click'); // Removed as per user request
                 if (isAllSelected) {
                     // Replace all text
                     setLines([e.key]);
@@ -272,7 +182,6 @@ const Typewriter = () => {
                     const currentLine = lines[activeLineIndex];
                     // Check for 65-char limit
                     if (currentLine.length >= 65) {
-                        playKeySound('ding');
                         // Auto-return: Insert new line then the character
                         setLines(prev => {
                             const newLines = [...prev];
@@ -304,7 +213,6 @@ const Typewriter = () => {
                     }
                 }
             } else if (e.key === 'Enter') {
-                playKeySound('ding');
                 if (isAllSelected) {
                     setLines(["", ""]);
                     setActiveLineIndex(1);
@@ -325,7 +233,6 @@ const Typewriter = () => {
                     setCursorCol(0);
                 }
             } else if (e.key === 'Backspace') {
-                // playKeySound('click'); // Removed as per user request
                 if (isAllSelected) {
                     setLines([""]);
                     setActiveLineIndex(0);
@@ -367,12 +274,15 @@ const Typewriter = () => {
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [activeLineIndex, cursorCol, isEditingName, isAllSelected, lines, fileName, fontSize, isSoundEnabled]);
+    }, [activeLineIndex, cursorCol, isEditingName, isAllSelected, lines, fileName, fontSize]);
 
     // Dynamic Layout Calculations
     const lineHeight = fontSize * 2; // e.g., 24px for 12px font
     const translateX = -(cursorCol * charWidth);
     const verticalOffset = (activeLineIndex * lineHeight) + (lineHeight / 2); // Center active line
+
+    // Cursor Focus State: Window must be focused AND not editing filename
+    const isCursorFocused = isWindowFocused && !isEditingName;
 
     return (
         <div className="app-container">
@@ -403,7 +313,6 @@ const Typewriter = () => {
             <div className="shortcuts-container">
                 <div>Cmd + S : Save</div>
                 <div>Cmd + A : Select All</div>
-                <div>Cmd + M : Toggle Sound ({isSoundEnabled ? 'On' : 'Off'})</div>
                 <div>Cmd + + : Increase Font</div>
                 <div>Cmd + - : Decrease Font</div>
             </div>
@@ -467,15 +376,12 @@ const Typewriter = () => {
                             onClick={(e) => handleLineClick(e, index)}
                         >
                             {line}
-                            {lines.length === 1 && lines[0] === "" && index === 0 && !isEditingName && (
-                                <span className="placeholder">Start typing...</span>
-                            )}
                         </div>
                     ))}
                 </div>
 
                 {/* The Static Cursor (Fixed in center) */}
-                {!isAllSelected && <div className="cursor-guide"></div>}
+                {!isAllSelected && <div className={`cursor-guide ${!isCursorFocused ? 'blurred' : ''}`}></div>}
             </div>
         </div>
     );
